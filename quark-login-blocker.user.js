@@ -1,7 +1,7 @@
-// ==UserScript==
+﻿// ==UserScript==
 // @name         通用 - 屏蔽自动登录弹窗
 // @namespace    qlb
-// @version      6.0.0
+// @version      1.1.0
 // @description  屏蔽自动登录弹窗，手动操作按钮正常触发。配置请在 Tampermonkey 菜单打开。
 // @match        *://*/*
 // @run-at       document-idle
@@ -197,7 +197,92 @@
   // ==================== 第 5 部分：配置面板（只在菜单打开时注入） ====================
   let panelEl = null;
 
-  function openUI() {
+  // ==================== Toast 工具（替换 alert/confirm） ====================
+  function toast(msg, type) {
+    type = type || 'info';
+    const colors = {
+      success: { bg: '#2ecc71', fg: '#fff' },
+      error: { bg: '#e74c3c', fg: '#fff' },
+      info: { bg: '#2c3e50', fg: '#fff' },
+    };
+    const c = colors[type] || colors.info;
+    const t = document.createElement('div');
+    t.style.cssText =
+      'position:fixed!important;top:20px!important;left:50%!important;transform:translateX(-50%)!important;' +
+      'background:' +
+      c.bg +
+      '!important;color:' +
+      c.fg +
+      '!important;padding:10px 20px!important;' +
+      'border-radius:6px!important;box-shadow:0 4px 16px rgba(0,0,0,.25)!important;' +
+      'z-index:2147483647!important;font-size:13px!important;font-weight:500!important;' +
+      'font-family:-apple-system,"Segoe UI",Roboto,sans-serif!important;' +
+      'transition:opacity .25s!important;opacity:0!important;pointer-events:none!important;';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    requestAnimationFrame(function () {
+      t.style.opacity = '1';
+    });
+    setTimeout(function () {
+      t.style.opacity = '0';
+      setTimeout(function () {
+        t.remove();
+      }, 260);
+    }, 2200);
+  }
+
+  function uiConfirm(msg, onOk, onCancel) {
+    onOk = onOk || function () {};
+    onCancel = onCancel || function () {};
+    // 复用 toast 的位置但做成带按钮的小卡片
+    const box = document.createElement('div');
+    box.style.cssText =
+      'position:fixed!important;top:20px!important;left:50%!important;transform:translateX(-50%)!important;' +
+      'background:#fff!important;color:#222!important;padding:14px 16px!important;' +
+      'border-radius:10px!important;box-shadow:0 8px 32px rgba(0,0,0,.3)!important;' +
+      'z-index:2147483647!important;font-size:13px!important;' +
+      'font-family:-apple-system,"Segoe UI",Roboto,sans-serif!important;' +
+      'display:flex!important;flex-direction:column!important;gap:10px!important;' +
+      'transition:opacity .2s!important;opacity:0!important;min-width:220px!important;max-width:380px!important;';
+    const msgEl = document.createElement('div');
+    msgEl.textContent = msg;
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+    const noBtn = document.createElement('button');
+    noBtn.textContent = '取消';
+    noBtn.style.cssText =
+      'padding:6px 14px;border:1px solid #ccc;border-radius:5px;background:#fff;cursor:pointer;font-size:12px;';
+    const yesBtn = document.createElement('button');
+    yesBtn.textContent = '确定';
+    yesBtn.style.cssText =
+      'padding:6px 14px;border:none;border-radius:5px;background:#e74c3c;color:#fff;cursor:pointer;font-size:12px;';
+    noBtn.onclick = function () {
+      box.style.opacity = '0';
+      setTimeout(function () {
+        box.remove();
+      }, 210);
+      onCancel();
+    };
+    yesBtn.onclick = function () {
+      box.style.opacity = '0';
+      setTimeout(function () {
+        box.remove();
+      }, 210);
+      onOk();
+    };
+    btnRow.appendChild(noBtn);
+    btnRow.appendChild(yesBtn);
+    box.appendChild(msgEl);
+    box.appendChild(btnRow);
+    document.body.appendChild(box);
+    requestAnimationFrame(function () {
+      box.style.opacity = '1';
+    });
+  }
+
+  // ==================== 第 5 部分：配置面板（只在菜单打开时注入） ====================
+  function openUI(options) {
+    options = options || {};
     // 避免重复打开
     if (panelEl && panelEl.parentNode) {
       panelEl.remove();
@@ -240,7 +325,6 @@
       '  box-sizing: border-box !important;',
       '}',
       '#qlb-panel input:focus, #qlb-panel textarea:focus, #qlb-panel select:focus { border-color: #4a90d9 !important; box-shadow: 0 0 0 2px rgba(74,144,217,.15) !important; }',
-      '#qlb-panel input::placeholder { color: #bbb !important; opacity: 1 !important; }',
       '#qlb-panel button {',
       '  -webkit-appearance: none !important;',
       '  appearance: none !important;',
@@ -260,6 +344,19 @@
       '#qlb-panel * { color-scheme: light !important; }',
     ].join('\\n');
     (document.head || document.documentElement).appendChild(themeStyle);
+
+    // 单独一个 style 管 placeholder，插到最后确保优先级最高
+    const phStyle = document.createElement('style');
+    phStyle.textContent = [
+      '/* placeholder 强制样式 — 放最后确保最高优先级 */',
+      '#qlb-panel input:not(:placeholder-shown) { background-color: #fff !important; }',
+      '#qlb-panel input:placeholder-shown { background-color: #fafafa !important; }',
+      '#qlb-panel input::-webkit-input-placeholder { color: #d0d0d0 !important; -webkit-text-fill-color: #d0d0d0 !important; opacity: 1 !important; font-style: italic !important; }',
+      '#qlb-panel input::-moz-placeholder { color: #d0d0d0 !important; opacity: 1 !important; font-style: italic !important; }',
+      '#qlb-panel input:-ms-input-placeholder { color: #d0d0d0 !important; opacity: 1 !important; font-style: italic !important; }',
+      '#qlb-panel input::placeholder { color: #d0d0d0 !important; -webkit-text-fill-color: #d0d0d0 !important; opacity: 1 !important; font-style: italic !important; }',
+    ].join('\n');
+    document.head.appendChild(phStyle);
 
     panelEl.style.cssText =
       'position:fixed!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;width:500px!important;max-height:80vh!important;background:#fff!important;color:#222!important;border-radius:12px!important;box-shadow:0 12px 48px rgba(0,0,0,.25)!important;z-index:2147483646!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;font-size:13px!important;line-height:1.5!important;font-family:-apple-system,"Segoe UI",Roboto,sans-serif!important;';
@@ -327,9 +424,18 @@
           'border:none;background:none;color:#e74c3c;cursor:pointer;font-size:12px;';
         del.onclick = function (ev) {
           ev.stopPropagation();
-          if (!confirm('删除 ' + host + '？')) return;
-          card.dataset.del = '1';
-          card.style.display = 'none';
+          uiConfirm('删除 ' + host + '？', function () {
+            delete SITES[host];
+            store.save(SITES);
+            const mm = matchHost(SITES, HOST);
+            SITE = mm ? mm.cfg : null;
+            unmount();
+            mount();
+            panelEl.remove();
+            bg.remove();
+            openUI();
+            toast('已删除', 'success');
+          });
         };
         actions.appendChild(del);
         head.appendChild(sn);
@@ -374,8 +480,25 @@
           inp.dataset.f = fd.key;
           inp.placeholder = fd.ph;
           if (cfg[fd.key]) inp.value = cfg[fd.key];
-          inp.style.cssText =
-            'width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;font-family:monospace;box-sizing:border-box;';
+          // 用 setProperty + 'important' 覆盖一切页面样式
+          const imp = function (k, v) {
+            inp.style.setProperty(k, v, 'important');
+          };
+          imp('width', '100%');
+          imp('padding', '6px 10px');
+          imp('border', '1px solid #d9d9d9');
+          imp('border-radius', '5px');
+          imp('background', '#fff');
+          imp('background-color', '#fff');
+          imp('color', '#222');
+          imp('-webkit-text-fill-color', '#222');
+          imp('font-size', '12px');
+          imp('font-family', '"SF Mono", Consolas, Monaco, monospace');
+          imp('box-sizing', 'border-box');
+          imp('outline', 'none');
+          imp('color-scheme', 'light');
+          imp('-webkit-appearance', 'none');
+          imp('appearance', 'none');
           row.appendChild(lab);
           row.appendChild(inp);
           fields.appendChild(row);
@@ -404,8 +527,21 @@
     const addInput = document.createElement('input');
     addInput.type = 'text';
     addInput.placeholder = '输入 hostname，如 pan.qq.com';
-    addInput.style.cssText =
-      'flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:12px;';
+    const imp2 = function (k, v) {
+      addInput.style.setProperty(k, v, 'important');
+    };
+    imp2('flex', '1');
+    imp2('padding', '7px 10px');
+    imp2('border', '1px solid #d9d9d9');
+    imp2('border-radius', '5px');
+    imp2('background', '#fff');
+    imp2('background-color', '#fff');
+    imp2('color', '#222');
+    imp2('-webkit-text-fill-color', '#222');
+    imp2('font-size', '12px');
+    imp2('color-scheme', 'light');
+    imp2('-webkit-appearance', 'none');
+    imp2('appearance', 'none');
     const addBtn = document.createElement('button');
     addBtn.textContent = '＋ 添加';
     addBtn.style.cssText =
@@ -413,11 +549,11 @@
     addBtn.onclick = function () {
       const hn = addInput.value.trim();
       if (!hn) {
-        alert('请输入 hostname');
+        toast('请输入 hostname', 'error');
         return;
       }
       if (SITES[hn]) {
-        alert(hn + ' 已存在');
+        toast(hn + ' 已存在', 'error');
         return;
       }
       // 直接保存空壳配置，让用户填
@@ -447,11 +583,13 @@
     resetBtn.style.cssText =
       'padding:7px 14px;border:1px solid #ccc;border-radius:5px;background:#fff;cursor:pointer;font-size:12px;';
     resetBtn.onclick = function () {
-      if (!confirm('恢复默认配置？你添加/修改的都会丢失。')) return;
-      store.reset();
-      panelEl.remove();
-      bg.remove();
-      openUI();
+      uiConfirm('恢复默认配置？你添加/修改的都会丢失。', function () {
+        store.reset();
+        panelEl.remove();
+        bg.remove();
+        openUI();
+        toast('已重置默认配置', 'success');
+      });
     };
     const rightBtns = document.createElement('div');
     rightBtns.style.cssText = 'display:flex;gap:8px;';
@@ -469,34 +607,86 @@
     saveBtn.style.cssText =
       'padding:7px 14px;border:none;border-radius:5px;background:#2ecc71;color:#fff;cursor:pointer;font-size:12px;font-weight:500;';
     saveBtn.onclick = function () {
+      let hasError = false;
+      let firstErrorCard = null;
       const result = {};
+
+      // 先清除之前的错误高亮和提示
+      bodyWrap.querySelectorAll('.qlb-err-tip').forEach(function (el) {
+        el.remove();
+      });
+      bodyWrap.querySelectorAll('input[data-f]').forEach(function (inp) {
+        inp.style.removeProperty('border');
+        inp.style.removeProperty('box-shadow');
+      });
+
       bodyWrap.querySelectorAll('.qlb-site').forEach(function (card) {
         if (card.dataset.del) return;
         const nameEl = card.querySelector('span');
         if (!nameEl) return;
-        // 排除 <span> 内的子元素（比如"当前"标签）
         const hostNode = nameEl.firstChild;
         const host = (
           hostNode ? hostNode.textContent : nameEl.textContent
         ).trim();
         const cfg = {};
+
         card.querySelectorAll('input[data-f]').forEach(function (inp) {
           const v = inp.value.trim();
-          if (v) cfg[inp.dataset.f] = v;
+          if (!v) return;
+          try {
+            document.createElement('div').querySelector(v);
+            cfg[inp.dataset.f] = v;
+          } catch (e) {
+            hasError = true;
+            if (!firstErrorCard) firstErrorCard = card;
+            // 输入框红框
+            inp.style.setProperty('border', '2px solid #e74c3c', 'important');
+            inp.style.setProperty(
+              'box-shadow',
+              '0 0 0 3px rgba(231,76,60,.2)',
+              'important'
+            );
+            // 输入框下面插入红色提示文字
+            const tip = document.createElement('div');
+            tip.className = 'qlb-err-tip';
+            tip.textContent = '❌ 选择器格式错误: "' + v + '"';
+            tip.style.cssText =
+              'color:#e74c3c;font-size:11px;margin-top:3px;margin-bottom:2px;';
+            inp.parentNode.insertBefore(tip, inp.nextSibling);
+          }
         });
-        if (Object.keys(cfg).length >= 2) result[host] = cfg; // 至少有 modalRoot + loginModal 才保存
+
+        if (Object.keys(cfg).length >= 2) result[host] = cfg;
       });
+
+      if (hasError) {
+        if (firstErrorCard) {
+          // card.children[1] 就是 fields div（DOM 结构固定：head + fields）
+          const fieldsDiv = firstErrorCard.children[1];
+          if (fieldsDiv) fieldsDiv.style.display = 'block';
+          // 聚焦第一个红色输入框
+          const badInp = firstErrorCard.querySelector(
+            'input[style*="2px solid"]'
+          );
+          if (badInp) badInp.focus();
+          // 滚到可视区域
+          firstErrorCard.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }
+        return;
+      }
+
       store.save(result);
       SITES = result;
       const m2 = matchHost(SITES, HOST);
       SITE = m2 ? m2.cfg : null;
       unmount();
       mount();
-      alert(
-        '✅ 已保存！\n\n当前网站 ' +
-          HOST +
-          '：' +
-          (SITE ? '已生效' : '暂无配置')
+      toast(
+        '已保存！当前网站 ' + HOST + '：' + (SITE ? '已生效' : '暂无配置'),
+        'success'
       );
       panelEl.remove();
       bg.remove();
@@ -511,32 +701,56 @@
     // 先插 bg 再插 panel
     document.body.appendChild(bg);
     document.body.appendChild(panelEl);
+
+    // 如果有指定要展开的配置项，找到对应卡片展开、高亮并滚动到可视区
+    if (options && options.expandHost) {
+      bodyWrap.querySelectorAll('.qlb-site').forEach(function (c) {
+        const sn = c.querySelector('span');
+        if (sn && sn.firstChild.textContent.trim() === options.expandHost) {
+          const f = c.children[1];
+          if (f) f.style.display = 'block';
+          if (options.highlight) {
+            c.style.setProperty('border', '2px solid #4a90d9', 'important');
+            c.style.setProperty(
+              'box-shadow',
+              '0 0 0 3px rgba(74,144,217,.2)',
+              'important'
+            );
+          }
+          c.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+    }
   }
 
   // ==================== 第 6 部分：Tampermonkey 菜单 ====================
+  // 只在顶层窗口注册菜单，iframe 里跳过（否则会注册 N 个同名菜单）
+  const IS_TOP = window.top === window.self;
   try {
-    GM_registerMenuCommand('🛠️ 打开配置面板', openUI);
-    GM_registerMenuCommand('🔄 重置为默认配置', function () {
-      if (!confirm('恢复默认配置？')) return;
-      store.reset();
-      SITES = store.load();
-      const m3 = matchHost(SITES, HOST);
-      SITE = m3 ? m3.cfg : null;
-      unmount();
-      mount();
-      alert('已重置');
-    });
-    GM_registerMenuCommand('📋 查看当前网站配置', function () {
-      alert(
-        'Host: ' +
-          HOST +
-          '\n' +
-          (SITE
-            ? '配置:\n' + JSON.stringify(SITE, null, 2)
-            : '❌ 当前网站无配置')
-      );
-    });
-    console.log('[QLB] ✅ Tampermonkey 菜单已注册');
+    if (IS_TOP) {
+      GM_registerMenuCommand('🛠️ 打开配置面板', openUI);
+      GM_registerMenuCommand('🔄 重置为默认配置', function () {
+        uiConfirm('恢复默认配置？', function () {
+          store.reset();
+          SITES = store.load();
+          const m3 = matchHost(SITES, HOST);
+          SITE = m3 ? m3.cfg : null;
+          unmount();
+          mount();
+          toast('已重置默认配置', 'success');
+        });
+      });
+      GM_registerMenuCommand('📋 查看当前网站配置', function () {
+        if (matched) {
+          openUI({ expandHost: matched.key, highlight: true });
+        } else {
+          openUI();
+        }
+      });
+      console.log('[QLB] ✅ Tampermonkey 菜单已注册');
+    } else {
+      console.log('[QLB] iframe 内跳过菜单注册');
+    }
   } catch (e) {
     console.warn('[QLB] GM_registerMenuCommand 不可用', e);
     // 回退：加一个悬浮按钮（仅当 GM 菜单不可用时）
