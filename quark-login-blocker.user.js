@@ -1,4 +1,4 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name         通用 - 屏蔽自动登录弹窗
 // @namespace    qlb
 // @version      6.0.0
@@ -211,6 +211,48 @@
 
     panelEl = document.createElement('div');
     panelEl.id = 'qlb-panel';
+
+    // 注入浅色主题样式（优先级最高，覆盖页面暗色）
+    const themeStyle = document.createElement('style');
+    themeStyle.textContent = [
+      '#qlb-panel {',
+      '  font-family: -apple-system, "Segoe UI", Roboto, sans-serif !important;',
+      '  font-size: 13px !important;',
+      '  color: #222 !important;',
+      '  background: #fff !important;',
+      '}',
+      '#qlb-panel input, #qlb-panel textarea, #qlb-panel select {',
+      '  background: #fff !important;',
+      '  color: #222 !important;',
+      '  border: 1px solid #d9d9d9 !important;',
+      '  border-radius: 5px !important;',
+      '  padding: 6px 10px !important;',
+      '  font-size: 12px !important;',
+      '  font-family: "SF Mono", Consolas, Monaco, monospace !important;',
+      '  outline: none !important;',
+      '  width: 100% !important;',
+      '  box-sizing: border-box !important;',
+      '  -webkit-text-fill-color: #222 !important;',
+      '}',
+      '#qlb-panel input:focus, #qlb-panel textarea:focus, #qlb-panel select:focus { border-color: #4a90d9 !important; box-shadow: 0 0 0 2px rgba(74,144,217,.15) !important; }',
+      '#qlb-panel input::placeholder { color: #bbb !important; opacity: 1 !important; }',
+      '#qlb-panel button {',
+      '  background: #fff !important;',
+      '  color: #222 !important;',
+      '  border: 1px solid #d9d9d9 !important;',
+      '  border-radius: 5px !important;',
+      '  cursor: pointer !important;',
+      '  font-size: 12px !important;',
+      '  padding: 6px 14px !important;',
+      '  transition: all .15s !important;',
+      '  -webkit-text-fill-color: #222 !important;',
+      '}',
+      '#qlb-panel button:hover { border-color: #4a90d9 !important; color: #4a90d9 !important; background: #fff !important; }',
+      '#qlb-panel button:disabled { opacity: .5 !important; cursor: not-allowed !important; }',
+      '#qlb-panel label { color: #888 !important; font-size: 11px !important; -webkit-text-fill-color: #888 !important; }',
+    ].join('\\n');
+    (document.head || document.documentElement).appendChild(themeStyle);
+
     panelEl.style.cssText =
       'position:fixed!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;width:500px!important;max-height:80vh!important;background:#fff!important;color:#222!important;border-radius:12px!important;box-shadow:0 12px 48px rgba(0,0,0,.25)!important;z-index:2147483646!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;font-size:13px!important;line-height:1.5!important;font-family:-apple-system,"Segoe UI",Roboto,sans-serif!important;';
 
